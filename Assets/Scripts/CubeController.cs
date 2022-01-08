@@ -7,6 +7,7 @@ public class CubeController : MonoBehaviour
 {
     // Hello Andrea
     // Hello Colin
+    // Hello Both
 
     public int oscPortNumber = 10000;
     public string oscDeviceUUID;
