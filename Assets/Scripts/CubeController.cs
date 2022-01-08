@@ -5,64 +5,57 @@ using extOSC;
 
 public class CubeController : MonoBehaviour
 {
-    // Hello Andrea
-    // Hello Colin
-    // Hello Both
 
-    public int oscPortNumber = 10000;
-    public string oscDeviceUUID;
+    float throwForce = 600;
+    Vector3 objectPosition;
+    float distance;
 
-    private float movementX;
-    private float movementY;
-
-    private float accelX;
-    private float accelY;
-    private float accelZ;
-
-    private float gravityX;
-    private float gravityY;
-    private float gravityZ;
+    public bool canHold = true;
+    public GameObject item;
+    public GameObject tempParent;
+    public bool isHolding = false;
 
     // Start is called before the first frame update
     void Start()
     {
-        // TODO
-        // Show IP on the screen
-
-        OSCReceiver receiver = gameObject.AddComponent<OSCReceiver>();
-        receiver.LocalPort = oscPortNumber;
-        receiver.Bind("/" + oscDeviceUUID +"/touch0", onTouch);
-        receiver.Bind("/" + oscDeviceUUID +"/accel", onAcceleration);
-        receiver.Bind("/" + oscDeviceUUID +"/gravity", onGravity);
         
-    }
-
-    public void onTouch(OSCMessage message)
-    {
-        movementX = (float)message.Values[0].DoubleValue;
-        movementY = -(float)message.Values[1].DoubleValue;
-        // Debug.Log("movementX = " + movementX.ToString("F6"));
-    }
-
-    protected void onAcceleration(OSCMessage message)
-    {
-        accelX = (float)message.Values[0].FloatValue;
-        accelY = -(float)message.Values[1].FloatValue;
-        accelZ = (float)message.Values[2].FloatValue;
-        // Debug.Log("AccelX: " + accelX + " | AccelY: " + accelY + " | AccelZ: " + accelZ);
-    }
-
-    public void onGravity(OSCMessage message)
-    {
-        gravityX = (float)message.Values[0].FloatValue;
-        gravityY = -(float)message.Values[1].FloatValue;
-        gravityZ = (float)message.Values[2].FloatValue;
-        Debug.Log("gravityX: " + gravityX + " | gravityY: " + gravityY + " | gravityZ: " + gravityZ);
     }
 
     // Update is called once per frame
     void Update()
     {
-        
+        // Check if holding
+        if(isHolding == true)
+        {
+            item.GetComponent<Rigidbody>().velocity = Vector3.zero;
+            item.GetComponent<Rigidbody>().angularVelocity = Vector3.zero;
+            item.transform.SetParent(tempParent.transform);
+
+            if(Input.GetMouseButtonDown(1))
+            {
+                //throw
+                item.GetComponent<Rigidbody>().AddForce(tempParent.transform.forward * throwForce);
+                isHolding = false;
+            }
+        }
+        else
+        {
+            objectPosition = item.transform.position;
+            item.transform.SetParent(null);
+            item.GetComponent<Rigidbody>().useGravity = true;
+            item.transform.position = objectPosition;
+        }
+    }
+
+    public void hold()
+    {
+        isHolding = true;
+        item.GetComponent<Rigidbody>().useGravity = false;
+        item.GetComponent<Rigidbody>().detectCollisions = true;
+    }
+
+    void release()
+    {
+        isHolding = false;
     }
 }
