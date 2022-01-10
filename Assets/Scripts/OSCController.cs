@@ -128,13 +128,14 @@ public class OSCController : MonoBehaviour
             if (Hand.transform.position.z <= (-throwLine.z + distanceXSum))
             {
                 Debug.Log("throw");
-                Debug.Log(distanceXSum);
                 float distance = (throwLine.z + distanceXSum) - -throwLocation.z;
                 touchPhase = false;
                 float throwPower = 1.5f;
                 float throwForce = Mathf.Pow((distance / throwTimer),throwPower) * 0.3f;
                 Debug.Log("Throwing Force: " + throwForce);
-                Ball.GetComponent<Rigidbody>().AddForce(new Vector3(Hand.transform.position.x + mappedGravityZ * throwForce *2, Hand.transform.position.y, Hand.transform.position.z * throwForce));
+                Debug.Log("HandRotationX: " + Hand.transform.eulerAngles.x);
+                Debug.Log("ThrowX: " + Hand.transform.eulerAngles.x * throwForce * 4);
+                Ball.GetComponent<Rigidbody>().AddForce(new Vector3(Hand.transform.position.x * throwForce * 2, Hand.transform.position.y, Hand.transform.position.z * throwForce));
                 Ball.GetComponent<CubeController>().release();
             }
 
