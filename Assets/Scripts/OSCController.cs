@@ -16,7 +16,7 @@ public class OSCController : MonoBehaviour
 
     public float touchPhaseCount;
 
-
+    // OSC Variables
     private float accelX;
     private float accelY;
     private float accelZ;
@@ -34,14 +34,12 @@ public class OSCController : MonoBehaviour
     public GameObject Hand;
 
     // Throw Variables
-    // To Do:
-    // Record accelZ as long as it stays positive.
-    // End when touch has ended
-    private bool recordAcceleration;
     private float tempAcceleration;
     private Vector3 throwLine;
     private Vector3 throwLocation;
     private float throwTimer;
+    private float distanceXTemp;
+    private float distanceXSum;
 
 
     void Awake()
@@ -62,82 +60,81 @@ public class OSCController : MonoBehaviour
         receiver.LocalPort = oscPortNumber;
         receiver.Bind("/" + oscDeviceUUID + "/gravity", onGravity);
         receiver.Bind("/" + oscDeviceUUID + "/touch0", onTouch);
-        // receiver.Bind("/" + oscDeviceUUID + "/accel", onAcceleration);
         receiver.Bind("/" + oscDeviceUUID + "/quaternion", onQuaternion);
         throwLine = new Vector3(0, 0, 18f);
         Debug.Log(throwLine.z);
     }
 
-    // OSC-Functions
-    public void onTouch(OSCMessage message)
-    {
-        touchPhase = !touchPhase;
-        touchX = (float)message.Values[0].DoubleValue;
-        touchY = -(float)message.Values[1].DoubleValue;
-        // Debug.Log("touch");
-    }
-
     void Update()
     {
-
-
-        // Check if Released
+        // Check if ball is grabbed
         if (touchPhase)
         {
             // Debug.Log("Grab");
             Ball.GetComponent<CubeController>().hold();
 
+            // Set quaternion for rotation
             float HandQuaternionX = quaternionX;
             float HandQuaternionY = quaternionY;
             float HandQuaternionZ = quaternionZ;
             float HandQuaternionW = quaternionW;
             Quaternion newQuaternion = new Quaternion(quaternionX, quaternionY, quaternionZ, quaternionW); ;
             Ball.transform.rotation = newQuaternion;
-
             Ball.GetComponent<Rigidbody>().velocity = Vector3.zero;
             Ball.GetComponent<Rigidbody>().angularVelocity = Vector3.zero;
 
 
+            //// Map OSC-Values
+            // We use the gravity values because they are more stable and precise than the acceleration values from ZigSim.
+            // gravityX will be mapped to Unity Z (forwards, backwards).
+            // gravityY will be mapped to Unity X (left,right).
+            // Unity Y with ZigSim is too imprecise unfortunately. At least with what we tried.
             float mappedGravityX = map(gravityX, -1f, 1f, 2.5f, 20f);
+            float mappedGravityY = map(gravityY, -1f, 1f, 0, 5);
+            float mappedGravityZ = map(-gravityZ, -1f, 1f, -5, 5);
 
+            // Check if moving forward. If yes -> track that movement (distance & time), we need it for the throwing force calculation.
             if (mappedGravityX >= tempAcceleration)
             {
-                recordAcceleration = true;
                 throwTimer += Time.deltaTime;
 
+                // Track the sum of distance in Unity X direction.
+                float distanceXDelta;
+                if(Mathf.Abs(mappedGravityY) > Mathf.Abs(distanceXTemp)) 
+                {
+                    distanceXDelta = Mathf.Abs(mappedGravityY) - Mathf.Abs(distanceXTemp);
+                } else 
+                {
+                    distanceXDelta = Mathf.Abs(distanceXTemp) - Mathf.Abs(mappedGravityY);
+                }
+                distanceXSum += distanceXDelta;
             }
             else
             {
-                recordAcceleration = false;
+                // Else -> reset values.
                 throwLocation = Hand.transform.position;
-                // if(throwTimer != 0) Debug.Log(throwTimer);
                 throwTimer = 0;
+                distanceXSum = 0;
             }
             tempAcceleration = mappedGravityX;
-            // Debug.Log(throwTimer);
+            distanceXTemp = mappedGravityY;
 
-            if (recordAcceleration)
-            {
-
-            }
-
-            float HandPositionX = Hand.transform.position.x;
-            // accelY is too unstable
+            float HandPositionX = mappedGravityY;            
             float HandPositionY = Hand.transform.position.y;
             float HandPositionZ = -mappedGravityX;
             Vector3 HandPosition = new Vector3(HandPositionX, HandPositionY, HandPositionZ);
             Hand.transform.position = HandPosition;
 
-            // Debug.Log(Hand.transform.position.z);
-            if (Hand.transform.position.z <= -throwLine.z)
+            if (Hand.transform.position.z <= (-throwLine.z + distanceXSum))
             {
                 Debug.Log("throw");
-                float distanceZ = throwLine.z - -throwLocation.z;
+                Debug.Log(distanceXSum);
+                float distance = (throwLine.z + distanceXSum) - -throwLocation.z;
                 touchPhase = false;
-                float throwPower = 2;
-                float throwForce = Mathf.Pow((distanceZ / throwTimer),throwPower) * 0.1f;
-                Debug.Log(throwForce);
-                Ball.GetComponent<Rigidbody>().AddForce(new Vector3(Hand.transform.position.x, Hand.transform.position.y, Hand.transform.position.z * throwForce));
+                float throwPower = 1.5f;
+                float throwForce = Mathf.Pow((distance / throwTimer),throwPower) * 0.3f;
+                Debug.Log("Throwing Force: " + throwForce);
+                Ball.GetComponent<Rigidbody>().AddForce(new Vector3(Hand.transform.position.x + mappedGravityZ * throwForce *2, Hand.transform.position.y, Hand.transform.position.z * throwForce));
                 Ball.GetComponent<CubeController>().release();
             }
 
@@ -145,24 +142,22 @@ public class OSCController : MonoBehaviour
         }
         else
         {
+            // Debug.Log("Release");
             touchPhaseCount = 0;
             Ball.GetComponent<CubeController>().release();
-            // Debug.Log("Release");
         }
 
     }
 
-
-
-    protected void onAcceleration(OSCMessage message)
+    //// OSC-Receiver-Functions
+    public void onTouch(OSCMessage message)
     {
-        accelX = (float)message.Values[0].FloatValue;
-        accelY = (float)message.Values[1].FloatValue;
-        accelZ = (float)message.Values[2].FloatValue;
-        // Debug.Log("AccelX: " + accelX + " | AccelY: " + accelY + " | AccelZ: " + accelZ);
-
-
+        // Debug.Log("touch");
+        touchPhase = !touchPhase;
+        touchX = (float)message.Values[0].DoubleValue;
+        touchY = -(float)message.Values[1].DoubleValue;
     }
+
 
     public void onGravity(OSCMessage message)
     {
@@ -171,8 +166,10 @@ public class OSCController : MonoBehaviour
         gravityZ = (float)message.Values[2].FloatValue;
         // Debug.Log("gravityX: " + gravityX);
 
-        // Round to prevent unprecision from ZigSim
+        // Round to prevent imprecision from ZigSim
         gravityX = Mathf.Round(gravityX * 100f) / 100f;
+        gravityY = Mathf.Round(gravityY * 100f) / 100f;
+        gravityZ = Mathf.Round(gravityZ * 100f) / 100f;
     }
 
     public void onQuaternion(OSCMessage message)
@@ -184,7 +181,8 @@ public class OSCController : MonoBehaviour
         quaternionW = (float)message.Values[3].FloatValue;
     }
 
-    // Helper Classes
+    //// Helper Classes
+
     // Maps a value from one arbitrary range to another arbitrary range
     public static float map(float value, float leftMin, float leftMax, float rightMin, float rightMax)
     {
